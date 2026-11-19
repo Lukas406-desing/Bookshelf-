@@ -1,0 +1,1651 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeseRegal — Digitales iOS Bücherregal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-app: #F3EFE8;
+            --bg-phone: #FAF7F2;
+            --bg-card: #FFFFFF;
+            --bg-subtle: #F1ECE3;
+            --text-main: #1C1917;
+            --text-muted: #78716C;
+            --border-subtle: #E7E0D5;
+            --accent: #D97706;
+            --accent-hover: #B45309;
+            --accent-light: #FEF3C7;
+            --shelf-top: #E8DFD1;
+            --shelf-edge: #C7B69E;
+            --shelf-shadow: rgba(41, 29, 17, 0.16);
+        }
+
+        .dark-mode {
+            --bg-app: #0F0E0D;
+            --bg-phone: #171513;
+            --bg-card: #221F1C;
+            --bg-subtle: #2C2824;
+            --text-main: #F5F2ED;
+            --text-muted: #A8A29E;
+            --border-subtle: #332E29;
+            --accent: #F59E0B;
+            --accent-hover: #D97706;
+            --accent-light: rgba(245, 158, 11, 0.16);
+            --shelf-top: #2B2520;
+            --shelf-edge: #1A1613;
+            --shelf-shadow: rgba(0, 0, 0, 0.45);
+        }
+
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-app);
+            color: var(--text-main);
+            margin: 0;
+            min-height: 100vh;
+            transition: background-color 0.25s ease, color 0.25s ease;
+        }
+
+        .phone-shell {
+            background-color: var(--bg-phone);
+            border: 1px solid var(--border-subtle);
+            box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.25);
+        }
+
+        .book-cover-card {
+            position: relative;
+            border-radius: 6px 10px 10px 6px;
+            overflow: hidden;
+            box-shadow:
+                inset 5px 0 8px rgba(255, 255, 255, 0.16),
+                inset -2px 0 5px rgba(0, 0, 0, 0.22),
+                0 8px 16px -4px rgba(0, 0, 0, 0.28);
+            transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease;
+        }
+
+        .book-cover-card:hover {
+            transform: translateY(-4px) scale(1.015);
+            box-shadow:
+                inset 5px 0 8px rgba(255, 255, 255, 0.2),
+                inset -2px 0 5px rgba(0, 0, 0, 0.25),
+                0 14px 24px -6px rgba(0, 0, 0, 0.35);
+        }
+
+        .book-spine-line {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 10px;
+            width: 1.5px;
+            background: linear-gradient(to bottom, rgba(255,255,255,0.35), rgba(255,255,255,0.05), rgba(0,0,0,0.25));
+        }
+
+        .shelf-plank {
+            height: 12px;
+            border-radius: 4px;
+            background: linear-gradient(to bottom, var(--shelf-top), var(--shelf-edge));
+            box-shadow: 0 6px 12px -2px var(--shelf-shadow);
+            margin-top: -2px;
+        }
+
+        .sheet-backdrop {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.22s ease;
+        }
+
+        .sheet-backdrop.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .sheet-panel {
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .sheet-backdrop.open .sheet-panel {
+            transform: translateY(0);
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="p-2 sm:p-6 flex flex-col items-center justify-start">
+
+    <!-- Top Desktop / Info Bar -->
+    <div class="w-full max-w-[440px] flex items-center justify-between mb-3 px-1">
+        <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+            <span class="text-xs font-bold tracking-tight opacity-80">iOS App Vorschau • LeseRegal</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <button
+                type="button"
+                onclick="toggleTheme()"
+                class="px-2.5 py-1 rounded-full text-xs font-semibold border transition"
+                style="background-color: var(--bg-card); border-color: var(--border-subtle);"
+            >
+                <span id="theme-toggle-label">Dunkelmodus</span>
+            </button>
+            <button
+                type="button"
+                onclick="resetDemoData()"
+                class="px-2.5 py-1 rounded-full text-xs font-semibold border transition hover:border-amber-500"
+                style="background-color: var(--bg-card); border-color: var(--border-subtle);"
+                title="Demodaten zurücksetzen"
+            >
+                Reset
+            </button>
+        </div>
+    </div>
+
+    <!-- iPhone Frame Container -->
+    <div class="phone-shell w-full max-w-[430px] rounded-[36px] overflow-hidden flex flex-col min-h-[780px] max-h-[900px] relative">
+
+        <!-- iOS Status Bar -->
+        <div class="px-6 pt-3 pb-2 flex items-center justify-between text-xs font-bold select-none shrink-0" style="color: var(--text-main);">
+            <span>13:05</span>
+            <div class="w-24 h-5 rounded-full bg-black/90 dark:bg-black flex items-center justify-center">
+                <span class="w-2 h-2 rounded-full bg-stone-700 mr-2"></span>
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500/80"></span>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <span>5G</span>
+                <span class="px-1.5 py-0.5 rounded text-[10px] bg-stone-800 text-white">88%</span>
+            </div>
+        </div>
+
+        <!-- App Header -->
+        <header class="px-5 pt-2 pb-3 flex items-center justify-between shrink-0 border-b" style="border-color: var(--border-subtle);">
+            <div>
+                <h1 id="header-title" class="text-2xl font-black tracking-tight">Mein Regal</h1>
+                <p id="header-subtitle" class="text-xs font-medium" style="color: var(--text-muted);">
+                    Bücher, Reihen &amp; Bewertungen
+                </p>
+            </div>
+            <button
+                type="button"
+                onclick="openAddBookModal()"
+                class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-md transition active:scale-95"
+                style="background-color: var(--accent);"
+                aria-label="Buch hinzufügen"
+            >
+                +
+            </button>
+        </header>
+
+        <!-- Scrollable Content Area -->
+        <main id="app-scroll-area" class="flex-1 overflow-y-auto no-scrollbar px-4 pt-4 pb-24 space-y-5">
+
+            <!-- TAB 1: REGAL -->
+            <section id="tab-shelf" class="space-y-5">
+                <!-- Filter Pills -->
+                <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                    <button type="button" data-filter="all" onclick="setFilter('all')" class="filter-pill px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition">Alle</button>
+                    <button type="button" data-filter="reading" onclick="setFilter('reading')" class="filter-pill px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition">Am Lesen</button>
+                    <button type="button" data-filter="finished" onclick="setFilter('finished')" class="filter-pill px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition">Gelesen</button>
+                    <button type="button" data-filter="wantToRead" onclick="setFilter('wantToRead')" class="filter-pill px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition">Merkliste</button>
+                </div>
+
+                <!-- Dynamic Shelf Rows Container -->
+                <div id="shelf-container" class="space-y-6"></div>
+            </section>
+
+            <!-- TAB 2: AKTUELL -->
+            <section id="tab-reading" class="hidden space-y-4">
+                <div class="rounded-2xl p-4 border" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-[11px] font-bold uppercase tracking-wider text-amber-600">Aktives Leseziel</p>
+                            <h2 class="text-base font-extrabold mt-0.5">Tagesziel: 30 Seiten</h2>
+                        </div>
+                        <span class="px-2.5 py-1 rounded-full text-xs font-extrabold" style="background-color: var(--accent-light); color: var(--accent);">
+                            12 Tage Streak 🔥
+                        </span>
+                    </div>
+                </div>
+                <div id="reading-list-container" class="space-y-4"></div>
+            </section>
+
+            <!-- TAB 3: KI-TIPPS -->
+            <section id="tab-ai" class="hidden space-y-4">
+                <div class="rounded-2xl p-4 border" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <span class="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider" style="background-color: var(--accent-light); color: var(--accent);">
+                                KI-Kuration
+                            </span>
+                            <h2 class="text-base font-extrabold mt-1.5">Passend zu deinen Top-Bewertungen</h2>
+                            <p class="text-xs mt-1 leading-relaxed" style="color: var(--text-muted);">
+                                Basierend auf deinen hoch bewerteten Büchern, Lieblingsgenres und deinem Verhältnis zu Online-Wertungen.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onclick="shuffleAIRecommendations()"
+                            class="px-3 py-2 rounded-xl text-xs font-bold text-white shrink-0 transition active:scale-95"
+                            style="background-color: var(--accent);"
+                        >
+                            Neu mixen
+                        </button>
+                    </div>
+                </div>
+                <div id="ai-recommendations-container" class="space-y-3.5"></div>
+            </section>
+
+            <!-- TAB 4: STATISTIK & BEWERTUNGS-VERGLEICH -->
+            <section id="tab-stats" class="hidden space-y-4">
+                <!-- KPI Grid -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="rounded-2xl p-3.5 border" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                        <p class="text-[11px] font-semibold" style="color: var(--text-muted);">Gelesene Bücher</p>
+                        <p id="stat-books-read" class="text-2xl font-black mt-1">0</p>
+                    </div>
+                    <div class="rounded-2xl p-3.5 border" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                        <p class="text-[11px] font-semibold" style="color: var(--text-muted);">Seiten gelesen</p>
+                        <p id="stat-pages-read" class="text-2xl font-black mt-1">0</p>
+                    </div>
+                    <div class="rounded-2xl p-3.5 border" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                        <p class="text-[11px] font-semibold" style="color: var(--text-muted);">Mein Schnitt</p>
+                        <p class="text-2xl font-black mt-1 text-amber-500"><span id="stat-avg-rating">–</span> ★</p>
+                    </div>
+                    <div class="rounded-2xl p-3.5 border" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                        <p class="text-[11px] font-semibold" style="color: var(--text-muted);">Online-Schnitt</p>
+                        <p class="text-2xl font-black mt-1"><span id="stat-online-avg-kpi">–</span> ★</p>
+                    </div>
+                </div>
+
+                <!-- Bewertungs-Radar (Eigene vs. Online) -->
+                <div class="rounded-2xl p-4 border space-y-3.5" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                    <div class="flex items-center justify-between gap-2">
+                        <div>
+                            <h2 class="text-sm font-extrabold">Bewertungs-Radar: Du vs. Online</h2>
+                            <p class="text-[11px]" style="color: var(--text-muted);">Vergleich deiner Sterne mit Community-Scores</p>
+                        </div>
+                        <span id="reader-personality-badge" class="px-2.5 py-1 rounded-full text-[11px] font-extrabold shrink-0" style="background-color: var(--accent-light); color: var(--accent);">
+                            –
+                        </span>
+                    </div>
+
+                    <p id="reader-personality-desc" class="text-xs leading-relaxed" style="color: var(--text-muted);"></p>
+
+                    <!-- Highlights: Geheimtipp & Kontroverse -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div class="rounded-xl p-3 border" style="background-color: var(--bg-subtle); border-color: var(--border-subtle);">
+                            <p class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600">Dein Geheimtipp</p>
+                            <p id="highlight-hidden-gem-title" class="text-xs font-extrabold mt-1 truncate">–</p>
+                            <p id="highlight-hidden-gem-meta" class="text-[11px] mt-0.5" style="color: var(--text-muted);">–</p>
+                        </div>
+                        <div class="rounded-xl p-3 border" style="background-color: var(--bg-subtle); border-color: var(--border-subtle);">
+                            <p class="text-[10px] font-extrabold uppercase tracking-wider text-rose-600">Größte Kontroverse</p>
+                            <p id="highlight-controversy-title" class="text-xs font-extrabold mt-1 truncate">–</p>
+                            <p id="highlight-controversy-meta" class="text-[11px] mt-0.5" style="color: var(--text-muted);">–</p>
+                        </div>
+                    </div>
+
+                    <!-- Radar Filter Buttons -->
+                    <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1">
+                        <button type="button" data-radar="all" onclick="setRadarFilter('all')" class="radar-pill px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap transition">Alle</button>
+                        <button type="button" data-radar="higher" onclick="setRadarFilter('higher')" class="radar-pill px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap transition">Ich besser (+)</button>
+                        <button type="button" data-radar="lower" onclick="setRadarFilter('lower')" class="radar-pill px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap transition">Ich kritischer (−)</button>
+                        <button type="button" data-radar="match" onclick="setRadarFilter('match')" class="radar-pill px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap transition">Im Einklang</button>
+                    </div>
+
+                    <!-- Radar Rows -->
+                    <div id="rating-radar-list" class="space-y-3 pt-1"></div>
+                </div>
+
+                <!-- Monthly Pages Chart -->
+                <div class="rounded-2xl p-4 border" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                    <h2 class="text-sm font-extrabold mb-2">Seiten pro Monat</h2>
+                    <div id="monthly-chart-container"></div>
+                </div>
+
+                <!-- Genre Donut & Top Authors -->
+                <div class="rounded-2xl p-4 border space-y-3" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                    <h2 class="text-sm font-extrabold">Genres &amp; Top-Autoren</h2>
+                    <div class="flex items-center gap-4">
+                        <div id="genre-donut-container" class="w-24 h-24 shrink-0"></div>
+                        <div id="genre-legend-container" class="flex-1 text-xs space-y-1.5 min-w-0"></div>
+                    </div>
+                    <div id="top-authors-list" class="pt-2 border-t text-xs space-y-1.5" style="border-color: var(--border-subtle);"></div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Bottom Tab Bar -->
+        <nav class="shrink-0 px-2 py-2 border-t grid grid-cols-4 gap-1" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+            <button type="button" data-tab="shelf" onclick="switchTab('shelf')" class="nav-btn py-1.5 rounded-xl flex flex-col items-center justify-center gap-0.5 text-[11px] font-bold transition">
+                <span>📚</span>
+                <span>Regal</span>
+            </button>
+            <button type="button" data-tab="reading" onclick="switchTab('reading')" class="nav-btn py-1.5 rounded-xl flex flex-col items-center justify-center gap-0.5 text-[11px] font-bold transition">
+                <span>📖</span>
+                <span>Aktuell</span>
+            </button>
+            <button type="button" data-tab="ai" onclick="switchTab('ai')" class="nav-btn py-1.5 rounded-xl flex flex-col items-center justify-center gap-0.5 text-[11px] font-bold transition">
+                <span>✨</span>
+                <span>KI-Tipps</span>
+            </button>
+            <button type="button" data-tab="stats" onclick="switchTab('stats')" class="nav-btn py-1.5 rounded-xl flex flex-col items-center justify-center gap-0.5 text-[11px] font-bold transition">
+                <span>📊</span>
+                <span>Statistik</span>
+            </button>
+        </nav>
+
+        <!-- Toast Banner -->
+        <div id="toast-banner" class="hidden absolute top-16 left-4 right-4 z-50 rounded-2xl px-4 py-2.5 text-xs font-bold text-white shadow-lg text-center" style="background-color: #1C1917;"></div>
+
+        <!-- BOOK DETAIL BOTTOM SHEET -->
+        <div id="detail-modal" class="sheet-backdrop fixed inset-0 z-40 bg-black/50 flex items-end justify-center p-0 sm:p-4" onclick="handleBackdropClick(event, 'detail-modal')">
+            <div class="sheet-panel w-full max-w-[430px] rounded-t-3xl sm:rounded-3xl max-h-[88vh] overflow-y-auto no-scrollbar p-5 space-y-4 border" style="background-color: var(--bg-phone); border-color: var(--border-subtle);" onclick="event.stopPropagation()">
+                <div class="flex items-center justify-between">
+                    <span id="detail-series-badge" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold" style="background-color: var(--accent-light); color: var(--accent);">Einzelband</span>
+                    <button type="button" onclick="closeModal('detail-modal')" class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold" style="background-color: var(--bg-subtle);">✕</button>
+                </div>
+
+                <div class="flex gap-4">
+                    <div id="detail-cover-box" class="w-24 h-36 shrink-0"></div>
+                    <div class="min-w-0 flex-1 space-y-1">
+                        <h2 id="detail-title" class="text-lg font-black leading-snug"></h2>
+                        <p id="detail-author" class="text-xs font-semibold" style="color: var(--text-muted);"></p>
+                        <p id="detail-genre-pages" class="text-[11px] font-medium pt-1" style="color: var(--text-muted);"></p>
+                        <div class="pt-2">
+                            <span id="detail-status-pill" class="inline-block px-2.5 py-1 rounded-full text-[11px] font-bold"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Progress Updater -->
+                <div class="rounded-2xl p-3.5 border space-y-2.5" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                    <div class="flex items-center justify-between text-xs font-bold">
+                        <span>Lesefortschritt</span>
+                        <span id="detail-progress-label">0 / 0 S. (0%)</span>
+                    </div>
+                    <div class="w-full h-2.5 rounded-full overflow-hidden" style="background-color: var(--bg-subtle);">
+                        <div id="detail-progress-bar" class="h-full rounded-full transition-all duration-300" style="background-color: var(--accent); width: 0%;"></div>
+                    </div>
+                    <input id="detail-page-slider" type="range" min="0" max="100" value="0" oninput="onSliderChange(this.value)" class="w-full accent-amber-600 cursor-pointer">
+                    <div class="flex items-center gap-2 pt-1">
+                        <button type="button" onclick="adjustCurrentBookPages(10)" class="flex-1 py-1.5 rounded-xl text-xs font-bold border transition" style="background-color: var(--bg-subtle); border-color: var(--border-subtle);">+10 S.</button>
+                        <button type="button" onclick="adjustCurrentBookPages(25)" class="flex-1 py-1.5 rounded-xl text-xs font-bold border transition" style="background-color: var(--bg-subtle); border-color: var(--border-subtle);">+25 S.</button>
+                        <button type="button" onclick="markCurrentBookFinished()" class="flex-1 py-1.5 rounded-xl text-xs font-bold text-white transition" style="background-color: #059669;">Beendet ✓</button>
+                    </div>
+                </div>
+
+                <!-- Own Star Rating -->
+                <div class="rounded-2xl p-3.5 border space-y-2" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold">Meine Bewertung</span>
+                        <span id="detail-my-rating-text" class="text-xs font-extrabold text-amber-500">Noch nicht bewertet</span>
+                    </div>
+                    <div id="detail-stars-row" class="flex items-center gap-2"></div>
+                </div>
+
+                <!-- Online vs. Own Rating Comparison -->
+                <div class="rounded-2xl p-3.5 border space-y-3" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-xs font-extrabold">Deine Wertung vs. Online-Community</span>
+                        <span id="detail-diff-badge" class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold">–</span>
+                    </div>
+
+                    <div class="space-y-2 text-xs">
+                        <div>
+                            <div class="flex justify-between font-semibold mb-1">
+                                <span>Du</span>
+                                <span id="detail-comp-my-val">–</span>
+                            </div>
+                            <div class="w-full h-2 rounded-full overflow-hidden" style="background-color: var(--bg-subtle);">
+                                <div id="detail-comp-my-bar" class="h-full rounded-full bg-amber-500 transition-all duration-300" style="width: 0%;"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between font-semibold mb-1">
+                                <span id="detail-comp-online-source">Online</span>
+                                <span id="detail-comp-online-val">–</span>
+                            </div>
+                            <div class="w-full h-2 rounded-full overflow-hidden" style="background-color: var(--bg-subtle);">
+                                <div id="detail-comp-online-bar" class="h-full rounded-full bg-sky-500 transition-all duration-300" style="width: 0%;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p id="detail-comp-summary" class="text-[11px] leading-relaxed" style="color: var(--text-muted);"></p>
+                </div>
+
+                <!-- Notes -->
+                <div class="rounded-2xl p-3.5 border space-y-2" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                    <label for="detail-notes-input" class="block text-xs font-bold">Persönliche Notiz</label>
+                    <textarea id="detail-notes-input" rows="2" onchange="saveCurrentBookNotes(this.value)" placeholder="Gedanken, Lieblingszitate oder Eindrücke..." class="w-full rounded-xl p-2.5 text-xs border outline-none" style="background-color: var(--bg-subtle); border-color: var(--border-subtle); color: var(--text-main);"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- SERIES MODAL -->
+        <div id="series-modal" class="sheet-backdrop fixed inset-0 z-40 bg-black/50 flex items-end justify-center p-0 sm:p-4" onclick="handleBackdropClick(event, 'series-modal')">
+            <div class="sheet-panel w-full max-w-[430px] rounded-t-3xl sm:rounded-3xl max-h-[82vh] overflow-y-auto no-scrollbar p-5 space-y-4 border" style="background-color: var(--bg-phone); border-color: var(--border-subtle);" onclick="event.stopPropagation()">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-[10px] font-extrabold uppercase tracking-wider text-amber-600">Buchreihe</p>
+                        <h2 id="series-modal-title" class="text-lg font-black"></h2>
+                    </div>
+                    <button type="button" onclick="closeModal('series-modal')" class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold" style="background-color: var(--bg-subtle);">✕</button>
+                </div>
+                <div id="series-modal-list" class="space-y-3"></div>
+            </div>
+        </div>
+
+        <!-- ADD BOOK MODAL -->
+        <div id="add-modal" class="sheet-backdrop fixed inset-0 z-40 bg-black/50 flex items-end justify-center p-0 sm:p-4" onclick="handleBackdropClick(event, 'add-modal')">
+            <div class="sheet-panel w-full max-w-[430px] rounded-t-3xl sm:rounded-3xl max-h-[88vh] overflow-y-auto no-scrollbar p-5 space-y-4 border" style="background-color: var(--bg-phone); border-color: var(--border-subtle);" onclick="event.stopPropagation()">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-black">Neues Buch hinzufügen</h2>
+                    <button type="button" onclick="closeModal('add-modal')" class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold" style="background-color: var(--bg-subtle);">✕</button>
+                </div>
+
+                <form onsubmit="handleAddBook(event)" class="space-y-3 text-xs">
+                    <div>
+                        <label class="block font-bold mb-1">Titel *</label>
+                        <input id="new-book-title" type="text" required placeholder="z. B. Project Hail Mary" class="w-full rounded-xl px-3 py-2.5 border outline-none" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="block font-bold mb-1">Autor *</label>
+                            <input id="new-book-author" type="text" required placeholder="z. B. Andy Weir" class="w-full rounded-xl px-3 py-2.5 border outline-none" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                        </div>
+                        <div>
+                            <label class="block font-bold mb-1">Genre</label>
+                            <select id="new-book-genre" class="w-full rounded-xl px-3 py-2.5 border outline-none" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                                <option value="Sci-Fi">Sci-Fi</option>
+                                <option value="Fantasy">Fantasy</option>
+                                <option value="Krimi & Thriller">Krimi &amp; Thriller</option>
+                                <option value="Sachbuch">Sachbuch</option>
+                                <option value="Literatur">Literatur</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="block font-bold mb-1">Buchreihe (optional)</label>
+                            <input id="new-book-series" type="text" placeholder="z. B. Dune-Zyklus" class="w-full rounded-xl px-3 py-2.5 border outline-none" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                        </div>
+                        <div>
+                            <label class="block font-bold mb-1">Band-Nr.</label>
+                            <input id="new-book-series-order" type="number" step="0.5" min="1" placeholder="1" class="w-full rounded-xl px-3 py-2.5 border outline-none" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2.5">
+                        <div>
+                            <label class="block font-bold mb-1">Seiten gesamt</label>
+                            <input id="new-book-pages" type="number" min="10" value="320" class="w-full rounded-xl px-3 py-2.5 border outline-none" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                        </div>
+                        <div>
+                            <label class="block font-bold mb-1">Status</label>
+                            <select id="new-book-status" class="w-full rounded-xl px-3 py-2.5 border outline-none" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                                <option value="reading">Am Lesen</option>
+                                <option value="finished">Gelesen</option>
+                                <option value="wantToRead">Merkliste</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block font-bold mb-1">Online-Score</label>
+                            <input id="new-book-online-rating" type="number" step="0.1" min="1" max="5" value="4.4" class="w-full rounded-xl px-3 py-2.5 border outline-none" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block font-bold mb-1.5">Cover-Farbthema</label>
+                        <div class="flex items-center gap-2.5">
+                            <button type="button" data-theme="amber" onclick="selectCoverTheme('amber')" class="theme-swatch w-7 h-7 rounded-full bg-amber-600"></button>
+                            <button type="button" data-theme="emerald" onclick="selectCoverTheme('emerald')" class="theme-swatch w-7 h-7 rounded-full bg-emerald-700"></button>
+                            <button type="button" data-theme="indigo" onclick="selectCoverTheme('indigo')" class="theme-swatch w-7 h-7 rounded-full bg-indigo-700"></button>
+                            <button type="button" data-theme="rose" onclick="selectCoverTheme('rose')" class="theme-swatch w-7 h-7 rounded-full bg-rose-700"></button>
+                            <button type="button" data-theme="slate" onclick="selectCoverTheme('slate')" class="theme-swatch w-7 h-7 rounded-full bg-slate-800"></button>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full py-3 rounded-2xl text-xs font-extrabold text-white shadow-md transition active:scale-98 mt-2" style="background-color: var(--accent);">
+                        Ins Regal legen
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== INITIAL DATA ====================
+        const COVER_THEMES = {
+            amber: { from: '#92400E', to: '#D97706', accent: '#FDE68A' },
+            emerald: { from: '#065F46', to: '#059669', accent: '#A7F3D0' },
+            indigo: { from: '#3730A3', to: '#4F46E5', accent: '#C7D2FE' },
+            rose: { from: '#9F1239', to: '#E11D48', accent: '#FECDD3' },
+            slate: { from: '#1E293B', to: '#475569', accent: '#E2E8F0' }
+        };
+
+        const DEFAULT_BOOKS = [
+            {
+                id: 'b1',
+                title: 'Der Wüstenplanet',
+                author: 'Frank Herbert',
+                genre: 'Sci-Fi',
+                series: 'Dune-Zyklus',
+                seriesOrder: 1,
+                totalPages: 688,
+                currentPage: 688,
+                status: 'finished',
+                myRating: 5,
+                onlineRating: 4.5,
+                onlineCount: '1,2 Mio.',
+                onlineSource: 'Goodreads & LovelyBooks',
+                theme: 'amber',
+                notes: 'Weltaufbau auf höchstem Niveau, Pauls Entwicklung ist faszinierend.'
+            },
+            {
+                id: 'b2',
+                title: 'Der Herr des Wüstenplaneten',
+                author: 'Frank Herbert',
+                genre: 'Sci-Fi',
+                series: 'Dune-Zyklus',
+                seriesOrder: 2,
+                totalPages: 352,
+                currentPage: 218,
+                status: 'reading',
+                myRating: 4,
+                onlineRating: 4.0,
+                onlineCount: '340 Tsd.',
+                onlineSource: 'Goodreads',
+                theme: 'amber',
+                notes: 'Viel politischer als Band 1, spannend und dicht.'
+            },
+            {
+                id: 'b3',
+                title: 'Die Kinder des Wüstenplaneten',
+                author: 'Frank Herbert',
+                genre: 'Sci-Fi',
+                series: 'Dune-Zyklus',
+                seriesOrder: 3,
+                totalPages: 544,
+                currentPage: 0,
+                status: 'wantToRead',
+                myRating: null,
+                onlineRating: 4.2,
+                onlineCount: '215 Tsd.',
+                onlineSource: 'Goodreads',
+                theme: 'amber',
+                notes: ''
+            },
+            {
+                id: 'b4',
+                title: 'Die Gefährten',
+                author: 'J.R.R. Tolkien',
+                genre: 'Fantasy',
+                series: 'Der Herr der Ringe',
+                seriesOrder: 1,
+                totalPages: 560,
+                currentPage: 560,
+                status: 'finished',
+                myRating: 5,
+                onlineRating: 4.6,
+                onlineCount: '2,8 Mio.',
+                onlineSource: 'Goodreads & Audible',
+                theme: 'emerald',
+                notes: 'Zeitloser Klassiker, besonders die Szenen in Moria.'
+            },
+            {
+                id: 'b5',
+                title: 'Die zwei Türme',
+                author: 'J.R.R. Tolkien',
+                genre: 'Fantasy',
+                series: 'Der Herr der Ringe',
+                seriesOrder: 2,
+                totalPages: 480,
+                currentPage: 480,
+                status: 'finished',
+                myRating: 4,
+                onlineRating: 4.5,
+                onlineCount: '1,5 Mio.',
+                onlineSource: 'Goodreads',
+                theme: 'emerald',
+                notes: 'Rohan und Helms Klamm sind pure Atmosphäre.'
+            },
+            {
+                id: 'b6',
+                title: 'Der Wunsch',
+                author: 'Andrzej Sapkowski',
+                genre: 'Fantasy',
+                series: 'The Witcher',
+                seriesOrder: 1,
+                totalPages: 352,
+                currentPage: 352,
+                status: 'finished',
+                myRating: 5,
+                onlineRating: 4.2,
+                onlineCount: '690 Tsd.',
+                onlineSource: 'LovelyBooks & Goodreads',
+                theme: 'indigo',
+                notes: 'Witzig, düster und super als Kurzgeschichten-Einstieg.'
+            },
+            {
+                id: 'b7',
+                title: 'Klara und die Sonne',
+                author: 'Kazuo Ishiguro',
+                genre: 'Literatur',
+                series: null,
+                seriesOrder: null,
+                totalPages: 336,
+                currentPage: 336,
+                status: 'finished',
+                myRating: 3,
+                onlineRating: 4.1,
+                onlineCount: '480 Tsd.',
+                onlineSource: 'Goodreads',
+                theme: 'rose',
+                notes: 'Schön geschrieben, aber das Tempo war mir stellenweise zu gemächlich.'
+            },
+            {
+                id: 'b8',
+                title: 'Atomic Habits',
+                author: 'James Clear',
+                genre: 'Sachbuch',
+                series: null,
+                seriesOrder: null,
+                totalPages: 320,
+                currentPage: 144,
+                status: 'reading',
+                myRating: 4,
+                onlineRating: 4.4,
+                onlineCount: '910 Tsd.',
+                onlineSource: 'Goodreads & Blinkist',
+                theme: 'slate',
+                notes: 'Konkrete Gewohnheits-Trigger direkt im Alltag testen.'
+            }
+        ];
+
+        const AI_POOL = [
+            {
+                title: 'Der Astronaut (Project Hail Mary)',
+                author: 'Andy Weir',
+                genre: 'Sci-Fi',
+                series: null,
+                seriesOrder: null,
+                totalPages: 496,
+                onlineRating: 4.6,
+                onlineCount: '870 Tsd.',
+                onlineSource: 'Goodreads',
+                theme: 'indigo',
+                reason: 'Verbindet clevere Wissenschaft wie bei „Dune“ mit hohem Lesetempo und Humor.'
+            },
+            {
+                title: 'Der Name des Windes',
+                author: 'Patrick Rothfuss',
+                genre: 'Fantasy',
+                series: 'Königsmörder-Chronik',
+                seriesOrder: 1,
+                totalPages: 848,
+                onlineRating: 4.5,
+                onlineCount: '950 Tsd.',
+                onlineSource: 'Goodreads',
+                theme: 'emerald',
+                reason: 'Sprachgewaltige Fantasy für Fans von „Der Herr der Ringe“ und „The Witcher“.'
+            },
+            {
+                title: 'Das Licht der Welt',
+                author: 'James S.A. Corey',
+                genre: 'Sci-Fi',
+                series: 'The Expanse',
+                seriesOrder: 1,
+                totalPages: 576,
+                onlineRating: 4.4,
+                onlineCount: '520 Tsd.',
+                onlineSource: 'Goodreads',
+                theme: 'slate',
+                reason: 'Realistische Raumfahrt und starke Figuren – passt ideal zu deinen 5-Sterne-Sci-Fi-Titeln.'
+            },
+            {
+                title: 'Die Schatten von Carcosa',
+                author: 'Robert W. Chambers',
+                genre: 'Literatur',
+                series: null,
+                seriesOrder: null,
+                totalPages: 288,
+                onlineRating: 3.9,
+                onlineCount: '110 Tsd.',
+                onlineSource: 'LovelyBooks',
+                theme: 'rose',
+                reason: 'Dichtes, unheimliches Stimmungsstück – spannend, wenn du eigene Maßstäbe anlegst.'
+            }
+        ];
+
+        // ==================== STATE & SAFE STORAGE ====================
+        function loadBooks() {
+            try {
+                const raw = localStorage.getItem('leseregal_books_v1');
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                }
+            } catch (e) {
+                console.warn('Storage load fallback:', e);
+            }
+            return JSON.parse(JSON.stringify(DEFAULT_BOOKS));
+        }
+
+        function saveBooks() {
+            try {
+                localStorage.setItem('leseregal_books_v1', JSON.stringify(books));
+            } catch (e) {
+                console.warn('Storage save failed:', e);
+            }
+        }
+
+        function formatDe(num, signed = false) {
+            const val = Number(num || 0);
+            const str = Math.abs(val).toFixed(1).replace('.', ',');
+            if (!signed) return val.toFixed(1).replace('.', ',');
+            if (Math.abs(val) < 0.05) return '0,0';
+            return (val > 0 ? '+' : '−') + str;
+        }
+
+        function setText(id, text) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = text;
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast-banner');
+            if (!toast) return;
+            toast.textContent = msg;
+            toast.classList.remove('hidden');
+            clearTimeout(showToast._timer);
+            showToast._timer = setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 2200);
+        }
+
+        let books = loadBooks();
+        let currentTab = 'shelf';
+        let currentFilter = 'all';
+        let radarFilter = 'all';
+        let selectedNewTheme = 'amber';
+        let activeBookId = null;
+        let displayedAI = AI_POOL.slice(0, 3);
+
+        // ==================== THEME & RESET ====================
+        function toggleTheme() {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            setText('theme-toggle-label', isDark ? 'Hellmodus' : 'Dunkelmodus');
+            renderCurrentView();
+        }
+
+        function resetDemoData() {
+            books = JSON.parse(JSON.stringify(DEFAULT_BOOKS));
+            saveBooks();
+            displayedAI = AI_POOL.slice(0, 3);
+            showToast('Demodaten wurden zurückgesetzt');
+            renderCurrentView();
+        }
+
+        // ==================== COVER GENERATOR ====================
+        function getThemeColors(themeName) {
+            return COVER_THEMES[themeName] || COVER_THEMES.amber;
+        }
+
+        function renderCoverHTML(book, compact = false) {
+            const c = getThemeColors(book.theme);
+            const progressPct = book.totalPages > 0
+                ? Math.min(100, Math.round(((book.currentPage || 0) / book.totalPages) * 100))
+                : 0;
+
+            return `
+                <div class="book-cover-card w-full h-full flex flex-col justify-between p-2.5 select-none"
+                     style="background: linear-gradient(145deg, ${c.from}, ${c.to}); color: #FFFFFF;">
+                    <div class="book-spine-line"></div>
+                    <div class="flex items-center justify-between gap-1 z-10">
+                        <span class="text-[8px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded bg-black/25">
+                            ${book.genre || 'Buch'}
+                        </span>
+                        ${book.myRating ? `<span class="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-black/25" style="color:${c.accent};">${book.myRating}★</span>` : ''}
+                    </div>
+
+                    <div class="z-10 my-auto py-1">
+                        <p class="${compact ? 'text-[10px]' : 'text-xs'} font-black leading-tight line-clamp-3 drop-shadow-sm">
+                            ${book.title}
+                        </p>
+                        <p class="text-[9px] font-medium opacity-85 mt-1 truncate">
+                            ${book.author}
+                        </p>
+                    </div>
+
+                    <div class="z-10">
+                        ${book.status === 'reading' ? `
+                            <div class="w-full h-1 rounded-full bg-black/30 overflow-hidden">
+                                <div class="h-full rounded-full" style="width:${progressPct}%; background-color:${c.accent};"></div>
+                            </div>
+                        ` : `<div class="h-0.5 w-6 rounded-full opacity-50" style="background-color:${c.accent};"></div>`}
+                    </div>
+                </div>
+            `;
+        }
+
+        // ==================== NAVIGATION & FILTERS ====================
+        function switchTab(tabName) {
+            currentTab = tabName;
+            ['shelf', 'reading', 'ai', 'stats'].forEach(t => {
+                const sec = document.getElementById('tab-' + t);
+                if (sec) sec.classList.toggle('hidden', t !== tabName);
+            });
+
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                const active = btn.dataset.tab === tabName;
+                btn.style.backgroundColor = active ? 'var(--accent-light)' : 'transparent';
+                btn.style.color = active ? 'var(--accent)' : 'var(--text-muted)';
+            });
+
+            const titles = {
+                shelf: ['Mein Regal', 'Bücher, Reihen & Bewertungen'],
+                reading: ['Aktuell am Lesen', 'Fortschritt & Tagesziel'],
+                ai: ['KI-Empfehlungen', 'Kuratiert für deinen Geschmack'],
+                stats: ['Statistik & Radar', 'Lesedaten & Online-Vergleich']
+            };
+            const [title, sub] = titles[tabName] || titles.shelf;
+            setText('header-title', title);
+            setText('header-subtitle', sub);
+
+            renderCurrentView();
+        }
+
+        function setFilter(filterKey) {
+            currentFilter = filterKey;
+            updateFilterPillStyles();
+            renderShelfTab();
+        }
+
+        function updateFilterPillStyles() {
+            document.querySelectorAll('.filter-pill').forEach(pill => {
+                const active = pill.dataset.filter === currentFilter;
+                pill.style.backgroundColor = active ? 'var(--accent)' : 'var(--bg-card)';
+                pill.style.color = active ? '#FFFFFF' : 'var(--text-main)';
+                pill.style.border = active ? '1px solid var(--accent)' : '1px solid var(--border-subtle)';
+            });
+        }
+
+        function setRadarFilter(key) {
+            radarFilter = key;
+            renderRatingRadar();
+        }
+
+        function renderCurrentView() {
+            updateFilterPillStyles();
+            if (currentTab === 'shelf') renderShelfTab();
+            if (currentTab === 'reading') renderReadingTab();
+            if (currentTab === 'ai') renderAITab();
+            if (currentTab === 'stats') renderStatsTab();
+        }
+
+        // ==================== SHELF TAB ====================
+        function getFilteredBooks() {
+            if (currentFilter === 'all') return books;
+            return books.filter(b => b.status === currentFilter);
+        }
+
+        function renderShelfTab() {
+            const container = document.getElementById('shelf-container');
+            if (!container) return;
+
+            const filtered = getFilteredBooks();
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="rounded-2xl p-6 text-center border" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                        <p class="text-sm font-bold">Keine Bücher in dieser Ansicht</p>
+                        <p class="text-xs mt-1" style="color: var(--text-muted);">Wechsle den Filter oder füge ein neues Buch hinzu.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Group books into series stacks and standalone books
+            const seriesMap = new Map();
+            const standalones = [];
+
+            filtered.forEach(book => {
+                if (book.series && book.series.trim() !== '') {
+                    const key = book.series.trim();
+                    if (!seriesMap.has(key)) seriesMap.set(key, []);
+                    seriesMap.get(key).push(book);
+                } else {
+                    standalones.push(book);
+                }
+            });
+
+            const items = [];
+            seriesMap.forEach((seriesBooks, seriesName) => {
+                seriesBooks.sort((a, b) => (a.seriesOrder || 99) - (b.seriesOrder || 99));
+                items.push({ type: 'series', seriesName, books: seriesBooks });
+            });
+            standalones.forEach(b => items.push({ type: 'book', book: b }));
+
+            // Chunk into shelf rows of 3 items
+            const rows = [];
+            for (let i = 0; i < items.length; i += 3) {
+                rows.push(items.slice(i, i + 3));
+            }
+
+            container.innerHTML = rows.map(row => `
+                <div class="space-y-1">
+                    <div class="grid grid-cols-3 gap-3 items-end px-1">
+                        ${row.map(item => item.type === 'series' ? renderSeriesStackCell(item) : renderSingleBookCell(item.book)).join('')}
+                        ${Array.from({ length: 3 - row.length }).map(() => '<div></div>').join('')}
+                    </div>
+                    <div class="shelf-plank"></div>
+                </div>
+            `).join('');
+        }
+
+        function renderSingleBookCell(book) {
+            const diffBadge = getRatingDiffBadgeHTML(book, true);
+            return `
+                <div class="flex flex-col cursor-pointer" onclick="openBookDetail('${book.id}')">
+                    <div class="aspect-[2/3] w-full">
+                        ${renderCoverHTML(book, true)}
+                    </div>
+                    <p class="text-[11px] font-extrabold mt-2 truncate">${book.title}</p>
+                    <p class="text-[10px] truncate" style="color: var(--text-muted);">${book.author}</p>
+                    <div class="mt-1 min-h-[18px]">${diffBadge}</div>
+                </div>
+            `;
+        }
+
+        function renderSeriesStackCell(seriesItem) {
+            const lead = seriesItem.books[0];
+            const finishedInSeries = seriesItem.books.filter(b => b.status === 'finished').length;
+            const totalInSeries = seriesItem.books.length;
+
+            return `
+                <div class="flex flex-col cursor-pointer" onclick="openSeriesModal('${encodeURIComponent(seriesItem.seriesName)}')">
+                    <div class="relative aspect-[2/3] w-full pt-1.5 pr-1.5">
+                        ${totalInSeries > 1 ? `
+                            <div class="absolute top-0 right-0 left-2 bottom-2 rounded-lg opacity-65" style="background-color: var(--shelf-edge);"></div>
+                        ` : ''}
+                        <div class="relative w-full h-full">
+                            ${renderCoverHTML(lead, true)}
+                            <span class="absolute bottom-1.5 right-1.5 z-20 px-1.5 py-0.5 rounded-md text-[9px] font-extrabold bg-black/75 text-white">
+                                ${finishedInSeries}/${totalInSeries} Reihe
+                            </span>
+                        </div>
+                    </div>
+                    <p class="text-[11px] font-extrabold mt-2 truncate">${seriesItem.seriesName}</p>
+                    <p class="text-[10px] truncate" style="color: var(--text-muted);">${lead.author}</p>
+                    <div class="mt-1 min-h-[18px]">
+                        <span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold" style="background-color: var(--accent-light); color: var(--accent);">
+                            Stapel öffnen
+                        </span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getRatingDiffBadgeHTML(book, mini = false) {
+            if (!book.myRating || !book.onlineRating) {
+                return mini ? `<span class="text-[9px]" style="color: var(--text-muted);">Online ${book.onlineRating ? formatDe(book.onlineRating) + '★' : '–'}</span>` : '';
+            }
+            const diff = book.myRating - book.onlineRating;
+            if (Math.abs(diff) <= 0.35) {
+                return `<span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-stone-500/15 text-stone-600 dark:text-stone-300">≈ Online (${formatDe(book.onlineRating)}★)</span>`;
+            }
+            if (diff > 0) {
+                return `<span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">${formatDe(diff, true)}★ vs Online</span>`;
+            }
+            return `<span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500/15 text-rose-700 dark:text-rose-300">${formatDe(diff, true)}★ vs Online</span>`;
+        }
+
+        // ==================== READING TAB ====================
+        function renderReadingTab() {
+            const container = document.getElementById('reading-list-container');
+            if (!container) return;
+
+            const activeBooks = books.filter(b => b.status === 'reading');
+            if (activeBooks.length === 0) {
+                container.innerHTML = `
+                    <div class="rounded-2xl p-6 text-center border" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                        <p class="text-sm font-bold">Aktuell kein Buch im Status „Am Lesen“</p>
+                        <p class="text-xs mt-1" style="color: var(--text-muted);">Lege ein neues Buch an oder öffne ein Buch im Regal.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = activeBooks.map(book => {
+                const pct = book.totalPages > 0 ? Math.min(100, Math.round(((book.currentPage || 0) / book.totalPages) * 100)) : 0;
+                return `
+                    <div class="rounded-2xl p-3.5 border flex gap-3.5" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                        <div class="w-16 h-24 shrink-0 cursor-pointer" onclick="openBookDetail('${book.id}')">
+                            ${renderCoverHTML(book, true)}
+                        </div>
+                        <div class="flex-1 min-w-0 flex flex-col justify-between">
+                            <div>
+                                <div class="flex items-start justify-between gap-2">
+                                    <h3 class="text-sm font-extrabold truncate cursor-pointer" onclick="openBookDetail('${book.id}')">${book.title}</h3>
+                                    <span class="text-xs font-black shrink-0" style="color: var(--accent);">${pct}%</span>
+                                </div>
+                                <p class="text-[11px] truncate" style="color: var(--text-muted);">${book.author}</p>
+                            </div>
+
+                            <div class="space-y-1.5 mt-2">
+                                <div class="w-full h-2 rounded-full overflow-hidden" style="background-color: var(--bg-subtle);">
+                                    <div class="h-full rounded-full transition-all duration-300" style="width:${pct}%; background-color: var(--accent);"></div>
+                                </div>
+                                <div class="flex items-center justify-between text-[10px] font-semibold" style="color: var(--text-muted);">
+                                    <span>${book.currentPage || 0} / ${book.totalPages} Seiten</span>
+                                    <button type="button" onclick="quickAddPages('${book.id}', 15)" class="px-2 py-0.5 rounded-lg font-extrabold text-white" style="background-color: var(--accent);">+15 S.</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function quickAddPages(bookId, delta) {
+            const book = books.find(b => b.id === bookId);
+            if (!book) return;
+            book.currentPage = Math.min(book.totalPages || 999, (book.currentPage || 0) + delta);
+            if (book.totalPages && book.currentPage >= book.totalPages) {
+                book.currentPage = book.totalPages;
+                book.status = 'finished';
+                showToast(`„${book.title}“ abgeschlossen!`);
+            } else {
+                showToast(`+${delta} Seiten bei „${book.title}“`);
+            }
+            saveBooks();
+            renderCurrentView();
+        }
+
+        // ==================== AI RECOMMENDATIONS TAB ====================
+        function shuffleAIRecommendations() {
+            const shuffled = [...AI_POOL].sort(() => Math.random() - 0.5);
+            displayedAI = shuffled.slice(0, 3);
+            renderAITab();
+            showToast('Neue KI-Empfehlungen generiert');
+        }
+
+        function renderAITab() {
+            const container = document.getElementById('ai-recommendations-container');
+            if (!container) return;
+
+            container.innerHTML = displayedAI.map((rec, idx) => {
+                const alreadyInShelf = books.some(b => b.title.toLowerCase() === rec.title.toLowerCase());
+                return `
+                    <div class="rounded-2xl p-3.5 border space-y-2.5" style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                        <div class="flex gap-3">
+                            <div class="w-14 h-20 shrink-0">
+                                ${renderCoverHTML({ ...rec, currentPage: 0, myRating: null }, true)}
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="text-[10px] font-extrabold text-amber-600">${rec.genre}</span>
+                                    <span class="text-[10px] font-bold" style="color: var(--text-muted);">Online ${formatDe(rec.onlineRating)} ★</span>
+                                </div>
+                                <h3 class="text-sm font-extrabold truncate">${rec.title}</h3>
+                                <p class="text-[11px] truncate" style="color: var(--text-muted);">${rec.author} • ${rec.totalPages} S.</p>
+                                <p class="text-[11px] mt-1.5 leading-snug" style="color: var(--text-muted);">${rec.reason}</p>
+                            </div>
+                        </div>
+                        <div class="flex justify-end">
+                            <button
+                                type="button"
+                                ${alreadyInShelf ? 'disabled' : `onclick="addAIRecommendation(${idx})"`}
+                                class="px-3 py-1.5 rounded-xl text-xs font-bold transition ${alreadyInShelf ? 'opacity-50 cursor-default' : 'text-white active:scale-95'}"
+                                style="background-color: ${alreadyInShelf ? 'var(--bg-subtle)' : 'var(--accent)'}; color: ${alreadyInShelf ? 'var(--text-main)' : '#FFFFFF'};"
+                            >
+                                ${alreadyInShelf ? 'Bereits im Regal ✓' : '+ Auf Merkliste'}
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function addAIRecommendation(index) {
+            const rec = displayedAI[index];
+            if (!rec) return;
+            const newBook = {
+                id: 'b_' + Date.now() + '_' + index,
+                title: rec.title,
+                author: rec.author,
+                genre: rec.genre,
+                series: rec.series || null,
+                seriesOrder: rec.seriesOrder || null,
+                totalPages: rec.totalPages || 320,
+                currentPage: 0,
+                status: 'wantToRead',
+                myRating: null,
+                onlineRating: rec.onlineRating || 4.3,
+                onlineCount: rec.onlineCount || '150 Tsd.',
+                onlineSource: rec.onlineSource || 'Goodreads',
+                theme: rec.theme || 'amber',
+                notes: 'Empfohlen durch KI-Kuration.'
+            };
+            books.unshift(newBook);
+            saveBooks();
+            renderAITab();
+            showToast(`„${rec.title}“ zur Merkliste hinzugefügt`);
+        }
+
+        // ==================== DETAIL & SERIES MODALS ====================
+        function openBookDetail(bookId) {
+            const book = books.find(b => b.id === bookId);
+            if (!book) return;
+            activeBookId = book.id;
+
+            setText('detail-series-badge', book.series ? `${book.series} • Band ${book.seriesOrder || '?'}` : 'Einzelband');
+            const coverBox = document.getElementById('detail-cover-box');
+            if (coverBox) coverBox.innerHTML = renderCoverHTML(book, false);
+
+            setText('detail-title', book.title);
+            setText('detail-author', book.author);
+            setText('detail-genre-pages', `${book.genre || 'Allgemein'} • ${book.totalPages || 0} Seiten`);
+
+            const statusLabels = {
+                finished: ['Gelesen', '#059669', 'rgba(5,150,105,0.14)'],
+                reading: ['Am Lesen', '#D97706', 'rgba(217,119,6,0.16)'],
+                wantToRead: ['Merkliste', '#4F46E5', 'rgba(79,70,229,0.14)']
+            };
+            const [sLabel, sColor, sBg] = statusLabels[book.status] || statusLabels.wantToRead;
+            const statusPill = document.getElementById('detail-status-pill');
+            if (statusPill) {
+                statusPill.textContent = sLabel;
+                statusPill.style.color = sColor;
+                statusPill.style.backgroundColor = sBg;
+            }
+
+            syncDetailProgressUI(book);
+            renderDetailRatingComparison(book);
+
+            const notesEl = document.getElementById('detail-notes-input');
+            if (notesEl) notesEl.value = book.notes || '';
+
+            document.getElementById('detail-modal').classList.add('open');
+        }
+
+        function syncDetailProgressUI(book) {
+            const total = Math.max(1, book.totalPages || 1);
+            const cur = Math.min(total, Math.max(0, book.currentPage || 0));
+            const pct = book.status === 'finished' ? 100 : Math.round((cur / total) * 100);
+
+            setText('detail-progress-label', `${cur} / ${total} S. (${pct}%)`);
+            const bar = document.getElementById('detail-progress-bar');
+            if (bar) bar.style.width = `${pct}%`;
+
+            const slider = document.getElementById('detail-page-slider');
+            if (slider) {
+                slider.max = total;
+                slider.value = cur;
+            }
+        }
+
+        function onSliderChange(val) {
+            const book = books.find(b => b.id === activeBookId);
+            if (!book) return;
+            book.currentPage = Number(val);
+            if (book.currentPage >= book.totalPages) {
+                book.status = 'finished';
+            } else if (book.currentPage > 0 && book.status === 'wantToRead') {
+                book.status = 'reading';
+            }
+            saveBooks();
+            syncDetailProgressUI(book);
+            renderCurrentView();
+        }
+
+        function adjustCurrentBookPages(delta) {
+            const book = books.find(b => b.id === activeBookId);
+            if (!book) return;
+            book.currentPage = Math.min(book.totalPages || 999, Math.max(0, (book.currentPage || 0) + delta));
+            if (book.currentPage >= book.totalPages) {
+                book.status = 'finished';
+            } else if (book.currentPage > 0 && book.status === 'wantToRead') {
+                book.status = 'reading';
+            }
+            saveBooks();
+            syncDetailProgressUI(book);
+            renderCurrentView();
+        }
+
+        function markCurrentBookFinished() {
+            const book = books.find(b => b.id === activeBookId);
+            if (!book) return;
+            book.currentPage = book.totalPages || book.currentPage;
+            book.status = 'finished';
+            saveBooks();
+            openBookDetail(book.id);
+            renderCurrentView();
+            showToast('Als gelesen markiert');
+        }
+
+        function setBookRating(stars) {
+            const book = books.find(b => b.id === activeBookId);
+            if (!book) return;
+            book.myRating = book.myRating === stars ? null : stars;
+            saveBooks();
+            renderDetailRatingComparison(book);
+            const coverBox = document.getElementById('detail-cover-box');
+            if (coverBox) coverBox.innerHTML = renderCoverHTML(book, false);
+            renderCurrentView();
+        }
+
+        function renderDetailRatingComparison(book) {
+            const starsRow = document.getElementById('detail-stars-row');
+            if (starsRow) {
+                starsRow.innerHTML = [1, 2, 3, 4, 5].map(n => {
+                    const active = book.myRating && n <= book.myRating;
+                    return `
+                        <button
+                            type="button"
+                            onclick="setBookRating(${n})"
+                            class="text-2xl leading-none transition transform hover:scale-110 ${active ? 'text-amber-500' : 'text-stone-300 dark:text-stone-600'}"
+                            aria-label="${n} Sterne"
+                        >★</button>
+                    `;
+                }).join('');
+            }
+
+            setText('detail-my-rating-text', book.myRating ? `${book.myRating},0 von 5 ★` : 'Noch nicht bewertet');
+
+            const onlineVal = Number(book.onlineRating || 4.2);
+            setText('detail-comp-source', book.onlineSource || 'Online');
+            setText('detail-comp-online-source', `${book.onlineSource || 'Online'} (${book.onlineCount || '–'})`);
+            setText('detail-comp-online-val', `${formatDe(onlineVal)} ★`);
+
+            const onlineBar = document.getElementById('detail-comp-online-bar');
+            if (onlineBar) onlineBar.style.width = `${Math.min(100, (onlineVal / 5) * 100)}%`;
+
+            const myBar = document.getElementById('detail-comp-my-bar');
+            const diffBadge = document.getElementById('detail-diff-badge');
+
+            if (!book.myRating) {
+                setText('detail-comp-my-val', '–');
+                if (myBar) myBar.style.width = '0%';
+                if (diffBadge) {
+                    diffBadge.textContent = 'Noch offen';
+                    diffBadge.style.backgroundColor = 'var(--bg-subtle)';
+                    diffBadge.style.color = 'var(--text-muted)';
+                }
+                setText('detail-comp-summary', 'Vergib oben Sterne, um deine Einschätzung direkt mit dem Online-Schnitt zu vergleichen.');
+                return;
+            }
+
+            setText('detail-comp-my-val', `${formatDe(book.myRating)} ★`);
+            if (myBar) myBar.style.width = `${(book.myRating / 5) * 100}%`;
+
+            const diff = book.myRating - onlineVal;
+            if (diffBadge) {
+                if (Math.abs(diff) <= 0.35) {
+                    diffBadge.textContent = 'Genau im Trend';
+                    diffBadge.style.backgroundColor = 'rgba(120,113,108,0.16)';
+                    diffBadge.style.color = 'var(--text-main)';
+                } else if (diff > 0) {
+                    diffBadge.textContent = `${formatDe(diff, true)} ★ begeisterter`;
+                    diffBadge.style.backgroundColor = 'rgba(5,150,105,0.16)';
+                    diffBadge.style.color = '#059669';
+                } else {
+                    diffBadge.textContent = `${formatDe(diff, true)} ★ kritischer`;
+                    diffBadge.style.backgroundColor = 'rgba(225,29,72,0.16)';
+                    diffBadge.style.color = '#E11D48';
+                }
+            }
+
+            if (Math.abs(diff) <= 0.35) {
+                setText('detail-comp-summary', `Deine Bewertung (${formatDe(book.myRating)} ★) deckt sich fast exakt mit dem Online-Schnitt (${formatDe(onlineVal)} ★).`);
+            } else if (diff > 0) {
+                setText('detail-comp-summary', `Du bewertest dieses Buch um ${formatDe(Math.abs(diff))} Sterne höher als der Online-Durchschnitt (${formatDe(onlineVal)} ★) – ein persönlicher Treffer.`);
+            } else {
+                setText('detail-comp-summary', `Du bist um ${formatDe(Math.abs(diff))} Sterne kritischer als die Online-Community (${formatDe(onlineVal)} ★).`);
+            }
+        }
+
+        function saveCurrentBookNotes(val) {
+            const book = books.find(b => b.id === activeBookId);
+            if (!book) return;
+            book.notes = val;
+            saveBooks();
+            showToast('Notiz gespeichert');
+        }
+
+        function openSeriesModal(encodedName) {
+            const seriesName = decodeURIComponent(encodedName);
+            const seriesBooks = books
+                .filter(b => b.series === seriesName)
+                .sort((a, b) => (a.seriesOrder || 99) - (b.seriesOrder || 99));
+
+            setText('series-modal-title', seriesName);
+            const listEl = document.getElementById('series-modal-list');
+            if (listEl) {
+                listEl.innerHTML = seriesBooks.map(b => {
+                    const pct = b.totalPages > 0 ? Math.round(((b.currentPage || 0) / b.totalPages) * 100) : 0;
+                    return `
+                        <div onclick="closeModal('series-modal'); setTimeout(() => openBookDetail('${b.id}'), 180);"
+                             class="rounded-2xl p-3 border flex items-center gap-3 cursor-pointer transition"
+                             style="background-color: var(--bg-card); border-color: var(--border-subtle);">
+                            <div class="w-12 h-18 shrink-0">${renderCoverHTML(b, true)}</div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-[10px] font-extrabold text-amber-600">Band ${b.seriesOrder || '?'}</p>
+                                <p class="text-xs font-extrabold truncate">${b.title}</p>
+                                <p class="text-[10px]" style="color: var(--text-muted);">${b.author} • ${b.status === 'finished' ? 'Gelesen' : pct + '%'}</p>
+                                <div class="mt-1">${getRatingDiffBadgeHTML(b, true)}</div>
+                            </div>
+                            <span class="text-xs font-bold opacity-50">›</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            document.getElementById('series-modal').classList.add('open');
+        }
+
+        function closeModal(id) {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove('open');
+        }
+
+        function handleBackdropClick(event, id) {
+            if (event.target.id === id) closeModal(id);
+        }
+
+        // ==================== STATS & RATING RADAR ====================
+        function renderStatsTab() {
+            const finishedBooks = books.filter(b => b.status === 'finished');
+            const totalPagesRead = books.reduce((sum, b) => sum + (b.currentPage || 0), 0);
+            const ratedBooks = books.filter(b => b.myRating);
+
+            const avgRating = ratedBooks.length
+                ? formatDe(ratedBooks.reduce((s, b) => s + b.myRating, 0) / ratedBooks.length)
+                : '–';
+            const onlineAvg = ratedBooks.length
+                ? formatDe(ratedBooks.reduce((s, b) => s + (b.onlineRating || 4.2), 0) / ratedBooks.length)
+                : '–';
+
+            setText('stat-books-read', String(finishedBooks.length));
+            setText('stat-pages-read', totalPagesRead.toLocaleString('de-DE'));
+            setText('stat-avg-rating', avgRating);
+            setText('stat-online-avg-kpi', onlineAvg);
+
+            renderRatingRadar();
+            renderMonthlyPagesChart(totalPagesRead);
+            renderGenreDonut();
+            renderTopAuthors();
+        }
+
+        function renderRatingRadar() {
+            document.querySelectorAll('.radar-pill').forEach(pill => {
+                const active = pill.dataset.radar === radarFilter;
+                pill.style.backgroundColor = active ? 'var(--accent)' : 'var(--bg-subtle)';
+                pill.style.color = active ? '#FFFFFF' : 'var(--text-main)';
+            });
+
+            const rated = books.filter(b => typeof b.myRating === 'number' && typeof b.onlineRating === 'number');
+            if (rated.length === 0) {
+                setText('reader-personality-badge', 'Noch keine Daten');
+                setText('reader-personality-desc', 'Bewerte Bücher mit Sternen, um deinen persönlichen Vergleich mit Online-Wertungen zu sehen.');
+                setText('highlight-hidden-gem-title', '–');
+                setText('highlight-hidden-gem-meta', '–');
+                setText('highlight-controversy-title', '–');
+                setText('highlight-controversy-meta', '–');
+                const listEl = document.getElementById('rating-radar-list');
+                if (listEl) listEl.innerHTML = '';
+                return;
+            }
+
+            const withDiff = rated.map(b => ({
+                book: b,
+                diff: b.myRating - b.onlineRating,
+                absDiff: Math.abs(b.myRating - b.onlineRating)
+            }));
+
+            const avgDiff = withDiff.reduce((s, x) => s + x.diff, 0) / withDiff.length;
+            if (avgDiff > 0.25) {
+                setText('reader-personality-badge', 'Begeisterter Leser');
+                setText('reader-personality-desc', `Im Schnitt bewertest du Bücher um ${formatDe(Math.abs(avgDiff))} Sterne höher als die Online-Community.`);
+            } else if (avgDiff < -0.25) {
+                setText('reader-personality-badge', 'Kritischer Kenner');
+                setText('reader-personality-desc', `Du legst strengere Maßstäbe an und liegst im Schnitt ${formatDe(Math.abs(avgDiff))} Sterne unter dem Online-Schnitt.`);
+            } else {
+                setText('reader-personality-badge', 'Im Community-Takt');
+                setText('reader-personality-desc', 'Deine Bewertungen liegen im Durchschnitt sehr nah am Online-Konsens.');
+            }
+
+            const gem = [...withDiff].sort((a, b) => b.diff - a.diff)[0];
+            setText('highlight-hidden-gem-title', gem.book.title);
+            setText('highlight-hidden-gem-meta', `Du ${gem.book.myRating}★ vs. Online ${formatDe(gem.book.onlineRating)}★ (${formatDe(gem.diff, true)})`);
+
+            const contro = [...withDiff].sort((a, b) => b.absDiff - a.absDiff)[0];
+            setText('highlight-controversy-title', contro.book.title);
+            setText('highlight-controversy-meta', `Abweichung: ${formatDe(contro.diff, true)} ★`);
+
+            const filteredRows = withDiff.filter(item => {
+                if (radarFilter === 'higher') return item.diff > 0.35;
+                if (radarFilter === 'lower') return item.diff < -0.35;
+                if (radarFilter === 'match') return Math.abs(item.diff) <= 0.35;
+                return true;
+            });
+
+            const listEl = document.getElementById('rating-radar-list');
+            if (!listEl) return;
+
+            if (filteredRows.length === 0) {
+                listEl.innerHTML = `<p class="text-xs py-2" style="color: var(--text-muted);">Keine Bücher für diesen Vergleichsfilter.</p>`;
+                return;
+            }
+
+            listEl.innerHTML = filteredRows.map(({ book, diff }) => {
+                const myPct = (book.myRating / 5) * 100;
+                const onPct = ((book.onlineRating || 4) / 5) * 100;
+                return `
+                    <div onclick="openBookDetail('${book.id}')" class="rounded-xl p-2.5 border cursor-pointer space-y-1.5" style="background-color: var(--bg-subtle); border-color: var(--border-subtle);">
+                        <div class="flex items-center justify-between gap-2 text-xs">
+                            <span class="font-extrabold truncate">${book.title}</span>
+                            <span class="text-[10px] font-extrabold shrink-0">${formatDe(diff, true)} ★</span>
+                        </div>
+                        <div class="space-y-1 text-[10px] font-semibold">
+                            <div class="flex items-center gap-2">
+                                <span class="w-11 shrink-0">Du (${book.myRating}★)</span>
+                                <div class="flex-1 h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+                                    <div class="h-full rounded-full bg-amber-500" style="width:${myPct}%;"></div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="w-11 shrink-0" style="color: var(--text-muted);">Online (${formatDe(book.onlineRating)}★)</span>
+                                <div class="flex-1 h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+                                    <div class="h-full rounded-full bg-sky-500" style="width:${onPct}%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderMonthlyPagesChart(totalPagesRead) {
+            const container = document.getElementById('monthly-chart-container');
+            if (!container) return;
+
+            const basePages = Math.max(360, Math.round(totalPagesRead * 0.14));
+            const months = [
+                { label: 'Jun', val: Math.round(basePages * 0.65) },
+                { label: 'Jul', val: Math.round(basePages * 0.85) },
+                { label: 'Aug', val: Math.round(basePages * 0.72) },
+                { label: 'Sep', val: Math.round(basePages * 0.95) },
+                { label: 'Okt', val: Math.round(basePages * 0.88) },
+                { label: 'Nov', val: basePages }
+            ];
+            const maxVal = Math.max(...months.map(m => m.val), 1);
+
+            container.innerHTML = `
+                <svg viewBox="0 0 320 125" class="w-full h-32 overflow-visible">
+                    ${months.map((m, idx) => {
+                        const h = Math.max(12, Math.round((m.val / maxVal) * 78));
+                        const x = 16 + idx * 49;
+                        const y = 92 - h;
+                        const isLast = idx === months.length - 1;
+                        return `
+                            <g>
+                                <text x="${x + 14}" y="${y - 5}" text-anchor="middle" font-size="8.5" font-weight="700" fill="currentColor" opacity="0.75">${m.val}</text>
+                                <rect x="${x}" y="${y}" width="28" height="${h}" rx="6" fill="${isLast ? '#D97706' : '#F59E0B'}" opacity="${isLast ? '1' : '0.55'}"/>
+                                <text x="${x + 14}" y="110" text-anchor="middle" font-size="9" font-weight="600" fill="currentColor" opacity="0.7">${m.label}</text>
+                            </g>
+                        `;
+                    }).join('')}
+                </svg>
+            `;
+        }
+
+        function renderGenreDonut() {
+            const donutEl = document.getElementById('genre-donut-container');
+            const legendEl = document.getElementById('genre-legend-container');
+            if (!donutEl || !legendEl) return;
+
+            const palette = ['#D97706', '#059669', '#4F46E5', '#E11D48', '#0D9488'];
+            const counts = {};
+            books.forEach(b => {
+                const g = b.genre || 'Sonstiges';
+                counts[g] = (counts[g] || 0) + 1;
+            });
+
+            const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+            const total = Math.max(1, books.length);
+            const r = 34;
+            const circ = 2 * Math.PI * r;
+            let offset = 0;
+
+            const segments = entries.map(([genre, count], i) => {
+                const dash = (count / total) * circ;
+                const color = palette[i % palette.length];
+                const circle = `<circle cx="48" cy="48" r="${r}" fill="none" stroke="${color}" stroke-width="11" stroke-dasharray="${dash} ${circ}" stroke-dashoffset="${-offset}" transform="rotate(-90 48 48)"/>`;
+                offset += dash;
+                return { genre, count, color, circle };
+            });
+
+            donutEl.innerHTML = `
+                <svg viewBox="0 0 96 96" class="w-full h-full">
+                    <circle cx="48" cy="48" r="${r}" fill="none" stroke="currentColor" stroke-width="11" opacity="0.1"/>
+                    ${segments.map(s => s.circle).join('')}
+                    <text x="48" y="46" text-anchor="middle" font-size="13" font-weight="800" fill="currentColor">${books.length}</text>
+                    <text x="48" y="57" text-anchor="middle" font-size="7.5" font-weight="600" fill="currentColor" opacity="0.65">Bücher</text>
+                </svg>
+            `;
+
+            legendEl.innerHTML = segments.map(s => `
+                <div class="flex items-center justify-between gap-2">
+                    <span class="flex items-center gap-1.5 truncate">
+                        <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color:${s.color};"></span>
+                        <span class="font-semibold truncate">${s.genre}</span>
+                    </span>
+                    <span class="font-bold opacity-75 shrink-0">${s.count}</span>
+                </div>
+            `).join('');
+        }
+
+        function renderTopAuthors() {
+            const listEl = document.getElementById('top-authors-list');
+            if (!listEl) return;
+
+            const stats = {};
+            books.forEach(b => {
+                if (!stats[b.author]) stats[b.author] = { count: 0, pages: 0 };
+                stats[b.author].count += 1;
+                stats[b.author].pages += (b.currentPage || 0);
+            });
+
+            const top = Object.entries(stats).sort((a, b) => b[1].pages - a[1].pages).slice(0, 3);
+            listEl.innerHTML = top.map(([author, info], idx) => `
+                <div class="flex items-center justify-between py-1">
+                    <span class="font-bold truncate">${idx + 1}. ${author}</span>
+                    <span class="text-[11px] shrink-0" style="color: var(--text-muted);">${info.count} ${info.count === 1 ? 'Buch' : 'Bücher'} • ${info.pages.toLocaleString('de-DE')} S.</span>
+                </div>
+            `).join('');
+        }
+
+        // ==================== ADD BOOK MODAL ====================
+        function openAddBookModal() {
+            selectCoverTheme(selectedNewTheme);
+            document.getElementById('add-modal').classList.add('open');
+        }
+
+        function selectCoverTheme(themeName) {
+            selectedNewTheme = themeName;
+            document.querySelectorAll('.theme-swatch').forEach(swatch => {
+                const active = swatch.dataset.theme === themeName;
+                swatch.style.outline = active ? '2.5px solid var(--accent)' : 'none';
+                swatch.style.outlineOffset = active ? '2px' : '0';
+            });
+        }
+
+        function handleAddBook(e) {
+            e.preventDefault();
+            const title = document.getElementById('new-book-title').value.trim();
+            const author = document.getElementById('new-book-author').value.trim();
+            if (!title || !author) return;
+
+            const genre = document.getElementById('new-book-genre').value;
+            const series = document.getElementById('new-book-series').value.trim() || null;
+            const seriesOrderVal = document.getElementById('new-book-series-order').value;
+            const seriesOrder = series ? (Number(seriesOrderVal) || 1) : null;
+            const totalPages = Math.max(10, Number(document.getElementById('new-book-pages').value) || 320);
+            const status = document.getElementById('new-book-status').value;
+            const onlineRating = Math.min(5, Math.max(1, Number(document.getElementById('new-book-online-rating').value) || 4.3));
+
+            const currentPage = status === 'finished'
+                ? totalPages
+                : (status === 'reading' ? Math.round(totalPages * 0.25) : 0);
+
+            const book = {
+                id: 'b_' + Date.now(),
+                title,
+                author,
+                genre,
+                series,
+                seriesOrder,
+                totalPages,
+                currentPage,
+                status,
+                myRating: status === 'finished' ? 4 : null,
+                onlineRating,
+                onlineCount: 'Neu',
+                onlineSource: 'Goodreads',
+                theme: selectedNewTheme,
+                notes: ''
+            };
+
+            books.unshift(book);
+            saveBooks();
+            closeModal('add-modal');
+            e.target.reset();
+            showToast(`„${title}“ hinzugefügt`);
+            renderCurrentView();
+        }
+
+        // ==================== INIT ====================
+        window.addEventListener('DOMContentLoaded', () => {
+            switchTab('shelf');
+        });
+    </script>
+</body>
+</html>
